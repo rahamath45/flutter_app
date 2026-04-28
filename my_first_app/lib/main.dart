@@ -9,7 +9,6 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const HomeRemediesApp());
 }
-
 class HomeRemediesApp extends StatelessWidget {
   const HomeRemediesApp({super.key});
 
