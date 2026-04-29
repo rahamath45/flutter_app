@@ -1,9 +1,27 @@
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:flutter/foundation.dart';
 
 class DeviceService {
+  static String? _cachedDeviceId;
+
   static Future<String> getDeviceId() async {
+    if (_cachedDeviceId != null) return _cachedDeviceId!;
+
+    if (kIsWeb) {
+      _cachedDeviceId = 'web_${DateTime.now().millisecondsSinceEpoch}';
+      return _cachedDeviceId!;
+    }
+
     final DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
-    final AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
-    return androidInfo.id; // Unique Android ID
+
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      final androidInfo = await deviceInfo.androidInfo;
+      _cachedDeviceId = androidInfo.id;
+    } else {
+      // For other platforms, use a generated ID
+      _cachedDeviceId = 'device_${DateTime.now().millisecondsSinceEpoch}';
+    }
+
+    return _cachedDeviceId!;
   }
 }

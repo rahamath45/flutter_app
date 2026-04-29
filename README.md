@@ -166,3 +166,45 @@ Avoid Flutter when:
 10. Summary
 Flutter is a cross‑platform UI framework used to build Android, iOS, Web and Desktop apps from a single codebase. It uses Dart language and widget-based architecture. Flutter is mainly used for fast development, UI-heavy applications, and MVP products.
 It provides high performance, rich UI widgets, and hot reload for faster development.
+
+o Android device detected yet. The code is ready - I've made the following changes:                                                                                  
+                                                                                                                                                                        
+  database_service.dart:      
+  - Changed PostgreSQL host from localhost to 10.0.2.2 (Android emulator's alias for the host machine's localhost)                                                      
+                                                                                                                                                                      
+  device_service.dart:                                                                                                                                                  
+  - Properly handles Android device ID retrieval                                                                                                                        
+                                                                                                                                                                        
+  README.md:                                                                                                                                                            
+  - Updated with Android instructions and database configuration for different platforms                                                                                
+                                                                                                                                                                        
+  To run on Android:                                                                                                                                                    
+  1. Connect your Android phone via USB with USB debugging enabled
+  2. Run flutter devices to verify the device is detected         
+  3. Run flutter run -d android                          
+
+  The app will connect to your PostgreSQL database at localhost:5432 via the Android device. Make sure PostgreSQL is running and the home_remedies database exists.     
+   
+✻ Churned for 1m 46s                                                                                                                                                    
+                  
+❯ i connect the android phone via USB                                                                                                                                   
+  now you run the flutter devices                                                                                                                                       
+                                                                                                                                                                        
+● Bash(flutter devices)                                                                                                                                                 
+  ⎿  Found 1 connected device:                                                                                                                                          
+       Linux (desktop) • linux • linux-x64 • Zorin OS 18 6.17.0-22-generic                                                                                              
+     … +4 lines (ctrl+o to expand)                                                                                                                                      
+                                                                                                                                                                        
+● The Android phone isn't detected yet. Please check the following on your phone:                                                                                       
+                  
+  1. Enable USB Debugging:                                                                                                                                              
+    - Go to Settings → About Phone → tap "Build Number" 7 times to enable Developer Mode                                                                              
+    - Go to Settings → Developer Options → enable "USB Debugging"                                                                                                       
+  2. Authorize the computer:                                                                                                                                            
+    - When you connect USB, a popup should appear on your phone asking "Allow USB debugging?"                                                                           
+    - Tap "Allow" and check "Always allow"                                                                                                                              
+  3. Check USB cable:                                                                                                                                                   
+    - Make sure the cable supports data transfer (not charging only)                                                                                                    
+                                                                                                                                                                        
+  After doing these steps, run flutter devices again and let me know what it shows.                                                                                     
+                                                                                    

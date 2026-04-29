@@ -41,6 +41,9 @@ dependencies:
   # Device ID for auto-login
   device_info_plus: ^11.0.0
 
+  # Logging
+  logging: ^1.3.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

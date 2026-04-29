@@ -1,11 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
+import 'package:logging/logging.dart';
 import 'database_service.dart';
 import 'device_service.dart';
 
 export 'database_service.dart' show User;
 
+final _logger = Logger('HomeRemediesApp');
+
+void _setupLogging() {
+  Logger.root.level = Level.ALL;
+  Logger.root.onRecord.listen((record) {
+    print('${record.level.name}: ${record.time}: ${record.message}');
+  });
+}
+
 void main() async {
+  _setupLogging();
+  _logger.info('Application starting...');
+  _logger.info('Web mode: $kIsWeb');
+
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const HomeRemediesApp());
 }
@@ -44,14 +59,17 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _checkAutoLogin() async {
+    _logger.info('Checking auto-login...');
     try {
       final deviceId = await DeviceService.getDeviceId();
+      _logger.fine('Device ID retrieved: $deviceId');
       final dbService = await DatabaseService.getInstance();
       final user = await dbService.getUserByDeviceId(deviceId);
 
       if (!mounted) return;
 
       if (user != null) {
+        _logger.info('Auto-login success for user: ${user.name}');
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -59,6 +77,7 @@ class _SplashScreenState extends State<SplashScreen> {
           ),
         );
       } else {
+        _logger.info('No existing user found, showing login page');
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -67,6 +86,7 @@ class _SplashScreenState extends State<SplashScreen> {
         );
       }
     } catch (e) {
+      _logger.severe('Auto-login failed: $e');
       // If database fails, go to login page
       if (!mounted) return;
       Navigator.pushReplacement(
@@ -128,6 +148,7 @@ class _LoginPageState extends State<LoginPage> {
   final List<String> _genders = ['Male', 'Female', 'Other', 'Prefer not to say'];
 
   Future<void> _login() async {
+    _logger.info('Login attempt started');
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
 
@@ -146,6 +167,7 @@ class _LoginPageState extends State<LoginPage> {
         );
 
         await dbService.saveUser(user);
+        _logger.info('User saved successfully: ${user.contact}');
 
         if (!mounted) return;
 
@@ -156,6 +178,7 @@ class _LoginPageState extends State<LoginPage> {
           ),
         );
       } catch (e) {
+        _logger.severe('Login failed: $e');
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: ${e.toString()}')),
@@ -393,6 +416,25 @@ class _RecordingPageState extends State<RecordingPage> {
   bool _isRecording = false;
   int _recordingSeconds = 0;
 
+  Future<void> _logout() async {
+    _logger.info('Logout initiated for user: ${widget.user.contact}');
+    try {
+      final deviceId = await DeviceService.getDeviceId();
+      final dbService = await DatabaseService.getInstance();
+      await dbService.deleteUserByDeviceId(deviceId);
+      _logger.info('User deleted successfully');
+    } catch (e) {
+      _logger.severe('Logout failed: $e');
+    }
+
+    if (!mounted) return;
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => const LoginPage()),
+    );
+  }
+
   void _toggleRecording() {
     setState(() {
       _isRecording = !_isRecording;
@@ -415,6 +457,13 @@ class _RecordingPageState extends State<RecordingPage> {
         title: const Text('Record Remedy'),
         centerTitle: true,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: _logout,
+            tooltip: 'Logout',
+          ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(24),
