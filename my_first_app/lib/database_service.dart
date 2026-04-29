@@ -40,7 +40,9 @@ class DatabaseService {
   }
 
   static Future<DatabaseService> getInstance() async {
-    _logger.fine('Getting database instance, web: $_isWeb, initialized: $_initialized');
+    _logger.fine(
+      'Getting database instance, web: $_isWeb, initialized: $_initialized',
+    );
     if (_isWeb) {
       _logger.warning('Database not available in web mode');
       return DatabaseService._();
@@ -59,7 +61,8 @@ class DatabaseService {
     try {
       _connection = await Connection.open(
         Endpoint(
-          host: '10.0.2.2',
+          host: '192.168.0.215',
+          port: 5433,
           database: 'home_remedies',
           username: 'postgres',
           password: 'password',
@@ -81,19 +84,20 @@ class DatabaseService {
       ''');
       _initialized = true;
       _logger.info('Database initialized, users table ready');
-    } catch (e) {
-      _logger.severe('Failed to initialize database: $e');
+    } catch (e, stack) {
+      _logger.severe('Failed to initialize database: $e', e, stack);
       _initialized = false;
     }
   }
 
-  Future<void> saveUser(User user) async {
+  Future<bool> saveUser(User user) async {
     if (!_initialized) {
       _logger.warning('Database not initialized, skipping save');
-      return;
+      return false;
     }
     _logger.fine('Saving user: ${user.contact}');
     try {
+      _logger.fine('Inserting/updating user: ${user.deviceId}');
       await _connection.execute(
         Sql.named('''
           INSERT INTO users (name, age, gender, location, contact, password, device_id)
@@ -116,9 +120,11 @@ class DatabaseService {
           'device_id': user.deviceId,
         },
       );
-      _logger.fine('User saved successfully');
-    } catch (e) {
-      _logger.severe('Failed to save user: $e');
+      _logger.fine('User saved successfully: ${user.deviceId}');
+      return true;
+    } catch (e, stack) {
+      _logger.severe('Failed to save user: $e', e, stack);
+      return false;
     }
   }
 
@@ -149,8 +155,8 @@ class DatabaseService {
         );
       }
       _logger.fine('No user found for deviceId: $deviceId');
-    } catch (e) {
-      _logger.severe('Failed to get user: $e');
+    } catch (e, stack) {
+      _logger.severe('Failed to get user: $e', e, stack);
     }
     return null;
   }
@@ -167,12 +173,16 @@ class DatabaseService {
         parameters: {'device_id': deviceId},
       );
       _logger.fine('User deleted successfully');
-    } catch (e) {
-      _logger.severe('Failed to delete user: $e');
+    } catch (e, stack) {
+      _logger.severe('Failed to delete user: $e', e, stack);
     }
   }
 
-  Future<User?> validateLogin(String contact, String password, String deviceId) async {
+  Future<User?> validateLogin(
+    String contact,
+    String password,
+    String deviceId,
+  ) async {
     if (!_initialized) {
       _logger.warning('Database not initialized, returning null');
       return null;
@@ -189,7 +199,9 @@ class DatabaseService {
       if (result.isNotEmpty) {
         final row = result.first;
         await _connection.execute(
-          Sql.named('UPDATE users SET device_id = @device_id WHERE contact = @contact'),
+          Sql.named(
+            'UPDATE users SET device_id = @device_id WHERE contact = @contact',
+          ),
           parameters: {'contact': contact, 'device_id': deviceId},
         );
         return User(
@@ -203,8 +215,8 @@ class DatabaseService {
           deviceId: deviceId,
         );
       }
-    } catch (e) {
-      _logger.severe('Failed to validate login: $e');
+    } catch (e, stack) {
+      _logger.severe('Failed to validate login: $e', e, stack);
     }
     return null;
   }

@@ -95,12 +95,14 @@ my_first_app/
 
 ## Database Configuration
 
-| Platform | Host | Reason |
-|----------|------|--------|
-| Android Emulator | `10.0.2.2` | Alias for host machine's localhost |
-| Android Device (USB) | `localhost` or actual IP | Direct connection |
-| Web | N/A | Database not available (stub mode) |
-| Linux Desktop | `localhost` | Direct connection |
+| Platform | Host | Port | Reason |
+|----------|------|------|--------|
+| Android Emulator | `10.0.2.2` | `5433` | Alias for host machine's localhost |
+| Android Device (USB) | `localhost` or actual IP | `5433` | Direct connection |
+| Web | N/A | N/A | Database not available (stub mode) |
+| Linux Desktop | `localhost` | `5433` | Direct connection |
+
+**Default credentials:** Username: `postgres`, Password: `password`, Database: `home_remedies`
 
 ## Development
 
@@ -122,3 +124,119 @@ flutter build web
 ```bash
 flutter build apk --release
 ```
+
+### adk
+/home/nisha/flutter_app/my_first_app/build/app/outputs/flutter-apk/app-debug.apk
+---------------------------------------------------------------------------------------------------
+Flutter Web Run – Error Walkthrough
+Step 1 — Tried to run Flutter in Chrome
+
+Command used:
+
+flutter run -d chrome
+
+Error:
+
+No pubspec.yaml file found.
+This command should be run from the root of your Flutter project.
+
+Reason:
+
+Command executed outside Flutter project folder
+pubspec.yaml not found
+
+Fix:
+
+cd my_first_app
+flutter run -d chrome
+Step 2 — Chrome device not found
+
+Command:
+
+flutter run -d chrome
+
+Error:
+
+No supported devices found with name or id matching 'chrome'
+
+Available device:
+
+Linux (desktop)
+
+Reason:
+
+Flutter Web not enabled
+Chrome browser not installed
+Step 3 — Enabled Flutter Web
+
+Command:
+
+flutter config --enable-web
+
+Output:
+
+Setting "enable-web" value to "true"
+
+This enables Flutter Web support.
+
+Step 4 — Still Chrome not available
+
+Command:
+
+flutter run -d chrome
+
+Error:
+
+No supported devices found with name or id matching 'chrome'
+
+Reason:
+
+Chrome not installed in Linux system
+Step 5 — Tried installing Chrome
+
+Command:
+
+sudo apt-get install chromium
+
+Error:
+
+sudo: a password is required
+
+Reason:
+
+No sudo permission
+Cannot install Chrome
+Step 6 — Alternative: Web Server Mode
+
+Used command:
+
+flutter run -d web-server --web-port=8080
+
+This runs Flutter in web server mode.
+
+Output:
+
+Flutter app running at:
+http://localhost:8080
+Final Result
+
+App successfully running using:
+
+http://localhost:8080
+
+This is:
+
+Flutter Web mode
+No Chrome dependency
+Works in any browser
+Final Working Command
+flutter run -d web-server --web-port=8080
+
+Open in browser:
+
+http://localhost:8080
+Conclusion
+Chrome not installed → cannot use -d chrome
+Used web-server mode instead
+App successfully runs in browser
+No Linux desktop or Android used

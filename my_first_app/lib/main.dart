@@ -22,8 +22,15 @@ void main() async {
   _logger.info('Web mode: $kIsWeb');
 
   WidgetsFlutterBinding.ensureInitialized();
+  // Pre-initialize the database so writes are ready on first use
+  try {
+    await DatabaseService.getInstance();
+  } catch (e, stack) {
+    _logger.severe('Database pre-initialization failed: $e', e, stack);
+  }
   runApp(const HomeRemediesApp());
 }
+
 class HomeRemediesApp extends StatelessWidget {
   const HomeRemediesApp({super.key});
 
@@ -72,17 +79,13 @@ class _SplashScreenState extends State<SplashScreen> {
         _logger.info('Auto-login success for user: ${user.name}');
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(
-            builder: (context) => RecordingPage(user: user),
-          ),
+          MaterialPageRoute(builder: (context) => RecordingPage(user: user)),
         );
       } else {
         _logger.info('No existing user found, showing login page');
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(
-            builder: (context) => const LoginPage(),
-          ),
+          MaterialPageRoute(builder: (context) => const LoginPage()),
         );
       }
     } catch (e) {
@@ -91,9 +94,7 @@ class _SplashScreenState extends State<SplashScreen> {
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(
-          builder: (context) => const LoginPage(),
-        ),
+        MaterialPageRoute(builder: (context) => const LoginPage()),
       );
     }
   }
@@ -145,7 +146,12 @@ class _LoginPageState extends State<LoginPage> {
   bool _obscurePassword = true;
   bool _isLoading = false;
 
-  final List<String> _genders = ['Male', 'Female', 'Other', 'Prefer not to say'];
+  final List<String> _genders = [
+    'Male',
+    'Female',
+    'Other',
+    'Prefer not to say',
+  ];
 
   Future<void> _login() async {
     _logger.info('Login attempt started');
@@ -157,7 +163,9 @@ class _LoginPageState extends State<LoginPage> {
         final dbService = await DatabaseService.getInstance();
 
         final user = User(
-          name: _nameController.text.trim().isEmpty ? null : _nameController.text.trim(),
+          name: _nameController.text.trim().isEmpty
+              ? null
+              : _nameController.text.trim(),
           age: int.parse(_ageController.text),
           gender: _selectedGender,
           location: _locationController.text.trim(),
@@ -166,23 +174,29 @@ class _LoginPageState extends State<LoginPage> {
           deviceId: deviceId,
         );
 
-        await dbService.saveUser(user);
-        _logger.info('User saved successfully: ${user.contact}');
-
-        if (!mounted) return;
-
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => RecordingPage(user: user),
-          ),
-        );
+        final saved = await dbService.saveUser(user);
+        if (saved) {
+          _logger.info('User saved successfully: ${user.contact}');
+          if (!mounted) return;
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => RecordingPage(user: user)),
+          );
+        } else {
+          _logger.severe('Failed to save user to database');
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error: Could not save user. Please try again.'),
+            ),
+          );
+        }
       } catch (e) {
         _logger.severe('Login failed: $e');
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.toString()}')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
       } finally {
         if (mounted) setState(() => _isLoading = false);
       }
@@ -348,7 +362,9 @@ class _LoginPageState extends State<LoginPage> {
                       prefixIcon: const Icon(Icons.lock_outline),
                       suffixIcon: IconButton(
                         icon: Icon(
-                          _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                          _obscurePassword
+                              ? Icons.visibility_off
+                              : Icons.visibility,
                         ),
                         onPressed: () {
                           setState(() {
@@ -384,7 +400,10 @@ class _LoginPageState extends State<LoginPage> {
                         : const Icon(Icons.login),
                     label: const Text(
                       'Login / Continue',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
@@ -519,10 +538,11 @@ class _RecordingPageState extends State<RecordingPage> {
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: (_isRecording
-                                  ? Theme.of(context).colorScheme.error
-                                  : Theme.of(context).colorScheme.primary)
-                              .withAlpha(77),
+                          color:
+                              (_isRecording
+                                      ? Theme.of(context).colorScheme.error
+                                      : Theme.of(context).colorScheme.primary)
+                                  .withAlpha(77),
                           blurRadius: 16,
                           offset: const Offset(0, 4),
                         ),
@@ -549,7 +569,9 @@ class _RecordingPageState extends State<RecordingPage> {
             Text(
               'Max: 15 minutes',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant.withAlpha(153),
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurfaceVariant.withAlpha(153),
               ),
             ),
             const Spacer(),
