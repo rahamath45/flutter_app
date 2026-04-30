@@ -127,6 +127,8 @@ flutter build apk --release
 
 ### adk
 /home/nisha/flutter_app/my_first_app/build/app/outputs/flutter-apk/app-debug.apk
+
+build/app/outputs/flutter-apk/app-debug.apk
 ---------------------------------------------------------------------------------------------------
 Flutter Web Run – Error Walkthrough
 Step 1 — Tried to run Flutter in Chrome
@@ -240,3 +242,7 @@ Chrome not installed → cannot use -d chrome
 Used web-server mode instead
 App successfully runs in browser
 No Linux desktop or Android used
+
+
+Perfect! I've fixed the issue. The problem was that your Flutter app on the real Android phone was trying to connect to 'localhost' (the phone's localhost), but PostgreSQL is running on your computer.
+

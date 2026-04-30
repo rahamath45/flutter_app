@@ -1,6 +1,6 @@
-import 'package:postgres/postgres.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
-import 'package:flutter/foundation.dart';
 
 class User {
   final int? id;
@@ -22,106 +22,66 @@ class User {
     required this.password,
     required this.deviceId,
   });
+
+  factory User.fromJson(Map<String, dynamic> json) {
+    return User(
+      id: json['id'] as int?,
+      name: json['name'] as String?,
+      age: json['age'] as int,
+      gender: json['gender'] as String,
+      location: json['location'] as String,
+      contact: json['contact'] as String,
+      password: json['password'] as String,
+      deviceId: json['device_id'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'name': name,
+      'age': age,
+      'gender': gender,
+      'location': location,
+      'contact': contact,
+      'password': password,
+      'device_id': deviceId,
+    };
+  }
 }
 
 final _logger = Logger('DatabaseService');
 
 class DatabaseService {
   static DatabaseService? _instance;
-  static bool _initialized = false;
-  static bool _isWeb = kIsWeb;
 
-  late Connection _connection;
+  // ⚠️ REPLACE THIS with your actual Railway URL after deployment
+  static const String _baseUrl = 'https://your-app.up.railway.app';
 
   DatabaseService._();
 
-  static void setWebMode(bool isWeb) {
-    _isWeb = isWeb;
-  }
-
   static Future<DatabaseService> getInstance() async {
-    _logger.fine(
-      'Getting database instance, web: $_isWeb, initialized: $_initialized',
-    );
-    if (_isWeb) {
-      _logger.warning('Database not available in web mode');
-      return DatabaseService._();
-    }
-    if (_instance == null) {
-      _instance = DatabaseService._();
-      await _instance!._init();
-    }
+    _instance ??= DatabaseService._();
     return _instance!;
   }
 
-  static bool get isInitialized => _initialized;
-
-  Future<void> _init() async {
-    _logger.info('Initializing database connection');
-    try {
-      _connection = await Connection.open(
-        Endpoint(
-          host: '192.168.0.215',
-          port: 5433,
-          database: 'home_remedies',
-          username: 'postgres',
-          password: 'password',
-        ),
-      );
-
-      await _connection.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-          id SERIAL PRIMARY KEY,
-          name VARCHAR(255),
-          age INTEGER NOT NULL,
-          gender VARCHAR(50) NOT NULL,
-          location VARCHAR(255) NOT NULL,
-          contact VARCHAR(100) NOT NULL,
-          password VARCHAR(255) NOT NULL,
-          device_id VARCHAR(255) UNIQUE NOT NULL,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-      ''');
-      _initialized = true;
-      _logger.info('Database initialized, users table ready');
-    } catch (e, stack) {
-      _logger.severe('Failed to initialize database: $e', e, stack);
-      _initialized = false;
-    }
-  }
+  static bool get isInitialized => true; // Always "initialized" with HTTP
 
   Future<bool> saveUser(User user) async {
-    if (!_initialized) {
-      _logger.warning('Database not initialized, skipping save');
-      return false;
-    }
-    _logger.fine('Saving user: ${user.contact}');
+    _logger.fine('Saving user via API: ${user.contact}');
     try {
-      _logger.fine('Inserting/updating user: ${user.deviceId}');
-      await _connection.execute(
-        Sql.named('''
-          INSERT INTO users (name, age, gender, location, contact, password, device_id)
-          VALUES (@name, @age, @gender, @location, @contact, @password, @device_id)
-          ON CONFLICT (device_id) DO UPDATE SET
-            name = EXCLUDED.name,
-            age = EXCLUDED.age,
-            gender = EXCLUDED.gender,
-            location = EXCLUDED.location,
-            contact = EXCLUDED.contact,
-            password = EXCLUDED.password
-        '''),
-        parameters: {
-          'name': user.name,
-          'age': user.age,
-          'gender': user.gender,
-          'location': user.location,
-          'contact': user.contact,
-          'password': user.password,
-          'device_id': user.deviceId,
-        },
+      final response = await http.post(
+        Uri.parse('$_baseUrl/api/save-user'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(user.toJson()),
       );
-      _logger.fine('User saved successfully: ${user.deviceId}');
-      return true;
+
+      if (response.statusCode == 200) {
+        _logger.fine('User saved successfully: ${user.deviceId}');
+        return true;
+      } else {
+        _logger.severe('Failed to save user: ${response.body}');
+        return false;
+      }
     } catch (e, stack) {
       _logger.severe('Failed to save user: $e', e, stack);
       return false;
@@ -129,30 +89,18 @@ class DatabaseService {
   }
 
   Future<User?> getUserByDeviceId(String deviceId) async {
-    if (!_initialized) {
-      _logger.warning('Database not initialized, returning null');
-      return null;
-    }
     _logger.fine('Fetching user by deviceId: $deviceId');
     try {
-      final result = await _connection.execute(
-        Sql.named('SELECT * FROM users WHERE device_id = @device_id'),
-        parameters: {'device_id': deviceId},
+      final response = await http.get(
+        Uri.parse('$_baseUrl/api/user/$deviceId'),
       );
 
-      if (result.isNotEmpty) {
-        final row = result.first;
-        _logger.fine('User found: ${row[5]}');
-        return User(
-          id: row[0] as int,
-          name: row[1] as String?,
-          age: row[2] as int,
-          gender: row[3] as String,
-          location: row[4] as String,
-          contact: row[5] as String,
-          password: row[6] as String,
-          deviceId: row[7] as String,
-        );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['user'] != null) {
+          _logger.fine('User found for deviceId: $deviceId');
+          return User.fromJson(data['user']);
+        }
       }
       _logger.fine('No user found for deviceId: $deviceId');
     } catch (e, stack) {
@@ -162,17 +110,17 @@ class DatabaseService {
   }
 
   Future<void> deleteUserByDeviceId(String deviceId) async {
-    if (!_initialized) {
-      _logger.warning('Database not initialized, skipping delete');
-      return;
-    }
     _logger.fine('Deleting user by deviceId: $deviceId');
     try {
-      await _connection.execute(
-        Sql.named('DELETE FROM users WHERE device_id = @device_id'),
-        parameters: {'device_id': deviceId},
+      final response = await http.delete(
+        Uri.parse('$_baseUrl/api/user/$deviceId'),
       );
-      _logger.fine('User deleted successfully');
+
+      if (response.statusCode == 200) {
+        _logger.fine('User deleted successfully');
+      } else {
+        _logger.warning('Delete response: ${response.body}');
+      }
     } catch (e, stack) {
       _logger.severe('Failed to delete user: $e', e, stack);
     }
@@ -183,37 +131,24 @@ class DatabaseService {
     String password,
     String deviceId,
   ) async {
-    if (!_initialized) {
-      _logger.warning('Database not initialized, returning null');
-      return null;
-    }
     _logger.fine('Validating login for: $contact');
     try {
-      final result = await _connection.execute(
-        Sql.named('''
-          SELECT * FROM users WHERE contact = @contact AND password = @password
-        '''),
-        parameters: {'contact': contact, 'password': password},
+      final response = await http.post(
+        Uri.parse('$_baseUrl/api/validate-login'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'contact': contact,
+          'password': password,
+          'device_id': deviceId,
+        }),
       );
 
-      if (result.isNotEmpty) {
-        final row = result.first;
-        await _connection.execute(
-          Sql.named(
-            'UPDATE users SET device_id = @device_id WHERE contact = @contact',
-          ),
-          parameters: {'contact': contact, 'device_id': deviceId},
-        );
-        return User(
-          id: row[0] as int,
-          name: row[1] as String?,
-          age: row[2] as int,
-          gender: row[3] as String,
-          location: row[4] as String,
-          contact: row[5] as String,
-          password: row[6] as String,
-          deviceId: deviceId,
-        );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['user'] != null) {
+          _logger.fine('Login validated for: $contact');
+          return User.fromJson(data['user']);
+        }
       }
     } catch (e, stack) {
       _logger.severe('Failed to validate login: $e', e, stack);
@@ -222,8 +157,7 @@ class DatabaseService {
   }
 
   void close() {
-    if (!_initialized) return;
-    _logger.info('Closing database connection');
-    _connection.close();
+    // No connection to close with HTTP client
+    _logger.info('DatabaseService closed (HTTP mode)');
   }
 }

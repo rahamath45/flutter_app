@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
 import 'database_service.dart';
 import 'device_service.dart';
@@ -19,7 +18,6 @@ void _setupLogging() {
 void main() async {
   _setupLogging();
   _logger.info('Application starting...');
-  _logger.info('Web mode: $kIsWeb');
 
   WidgetsFlutterBinding.ensureInitialized();
   // Pre-initialize the database so writes are ready on first use
