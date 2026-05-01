@@ -55,7 +55,7 @@ class DatabaseService {
   static DatabaseService? _instance;
 
   // ⚠️ REPLACE THIS with your actual Railway URL after deployment
-  static const String _baseUrl = 'https://your-app.up.railway.app';
+  static const String _baseUrl = 'https://flutterapp-production-f4dc.up.railway.app';
 
   DatabaseService._();
 
