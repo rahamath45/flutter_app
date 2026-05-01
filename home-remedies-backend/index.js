@@ -45,6 +45,17 @@ app.get('/', (req, res) => {
   res.json({ message: 'Home Remedies API Running!' });
 });
 
+// GET /api/users → List all users (debug endpoint)
+app.get('/api/users', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM users ORDER BY created_at DESC');
+    res.status(200).json({ success: true, count: result.rows.length, users: result.rows });
+  } catch (err) {
+    console.error('❌ List users error:', err.message);
+    res.status(500).json({ error: 'Failed to list users' });
+  }
+});
+
 // POST /api/save-user → Insert or update user by device_id
 app.post('/api/save-user', async (req, res) => {
   const { name, age, gender, location, contact, password, device_id } = req.body;
