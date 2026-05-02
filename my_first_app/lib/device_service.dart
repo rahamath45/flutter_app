@@ -16,7 +16,9 @@ class DeviceService {
 
     if (defaultTargetPlatform == TargetPlatform.android) {
       final androidInfo = await deviceInfo.androidInfo;
-      _cachedDeviceId = androidInfo.id;
+      // Use fingerprint (includes device model + build) for a truly unique ID
+      // Build.ID is just the ROM build ID and can be the same across devices
+      _cachedDeviceId = androidInfo.fingerprint;
     } else {
       // For other platforms, use a generated ID
       _cachedDeviceId = 'device_${DateTime.now().millisecondsSinceEpoch}';

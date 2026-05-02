@@ -93,8 +93,11 @@ app.get('/api/users', async (req, res) => {
 app.post('/api/save-user', async (req, res) => {
   const { name, age, gender, location, contact, password, device_id } = req.body;
 
+  console.log(`📥 Save user request: contact=${contact}, device_id=${device_id}, name=${name}`);
+
   // Validate required fields
   if (!age || !gender || !location || !contact || !password || !device_id) {
+    console.log(`❌ Missing fields: age=${age}, gender=${gender}, location=${location}, contact=${contact}, password=${!!password}, device_id=${device_id}`);
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
@@ -113,7 +116,7 @@ app.post('/api/save-user', async (req, res) => {
       [name || null, age, gender, location, contact, password, device_id]
     );
 
-    console.log(`✅ User saved: ${contact}, device_id: ${device_id}`);
+    console.log(`✅ User saved: ${contact}, device_id in DB: ${result.rows[0].device_id}`);
     res.status(200).json({ success: true, user: result.rows[0] });
   } catch (err) {
     console.error('❌ Save user error:', err.message);
@@ -197,25 +200,36 @@ app.post('/api/validate-login', async (req, res) => {
   }
 });
 
-// POST /api/logout → Clear device_id without deleting user data
+// POST /api/logout → Clear device_id for the current user only
 app.post('/api/logout', async (req, res) => {
-  const { device_id } = req.body;
+  const { device_id, contact } = req.body;
 
   if (!device_id) {
     return res.status(400).json({ error: 'Missing device_id' });
   }
 
   try {
-    const result = await pool.query(
-      'UPDATE users SET device_id = NULL WHERE device_id = $1 RETURNING *',
-      [device_id]
-    );
+    let result;
+    if (contact) {
+      // If contact is provided, only clear device_id for that specific user
+      result = await pool.query(
+        'UPDATE users SET device_id = NULL WHERE device_id = $1 AND contact = $2 RETURNING *',
+        [device_id, contact]
+      );
+    } else {
+      // Fallback: clear device_id but only for ONE user (LIMIT via subquery)
+      result = await pool.query(
+        `UPDATE users SET device_id = NULL 
+         WHERE id = (SELECT id FROM users WHERE device_id = $1 LIMIT 1) 
+         RETURNING *`,
+        [device_id]
+      );
+    }
 
     if (result.rows.length > 0) {
-      console.log(`✅ User logged out (device_id cleared): ${device_id}`);
+      console.log(`✅ User logged out: ${result.rows[0].contact} (device_id cleared)`);
       res.status(200).json({ success: true, message: 'Logged out successfully' });
     } else {
-      // Even if no user found, still consider logout successful
       res.status(200).json({ success: true, message: 'Logged out' });
     }
   } catch (err) {

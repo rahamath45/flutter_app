@@ -779,7 +779,7 @@ class _RecordingPageState extends State<RecordingPage> {
     try {
       final deviceId = await DeviceService.getDeviceId();
       final dbService = await DatabaseService.getInstance();
-      await dbService.logout(deviceId);
+      await dbService.logout(deviceId, contact: widget.user.contact);
       _logger.info('User logged out successfully (data preserved)');
     } catch (e) {
       _logger.severe('Logout failed: $e');

@@ -183,13 +183,16 @@ class DatabaseService {
   }
 
   /// Logout: clears device_id without deleting user data
-  Future<bool> logout(String deviceId) async {
-    _logger.fine('Logging out device: $deviceId');
+  Future<bool> logout(String deviceId, {String? contact}) async {
+    _logger.fine('Logging out device: $deviceId, contact: $contact');
     try {
+      final body = <String, dynamic>{'device_id': deviceId};
+      if (contact != null) body['contact'] = contact;
+
       final response = await http.post(
         Uri.parse('$_baseUrl/api/logout'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'device_id': deviceId}),
+        body: jsonEncode(body),
       );
 
       if (response.statusCode == 200) {
