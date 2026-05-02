@@ -209,4 +209,70 @@ o Android device detected yet. The code is ready - I've made the following chang
   After doing these steps, run flutter devices again and let me know what it shows.                                                                                     
                                                                                     
 
-                                                                                    
+    FULL STEP-BY-STEP (CLEAR VERSION)
+🟢 STEP 1: Railway Login
+    • 👉 https://railway.app போ 
+    • Login with GitHub 
+
+🟢 STEP 2: New Project Create
+    • Click → New Project 
+    • Select → Deploy from GitHub repo 
+    • உன் flutter_app repo select பண்ணு 
+
+🔴 IMPORTANT (MOST PEOPLE MISS THIS)
+👉 Repo select பண்ணினதும் build fail ஆகும்
+ஏன்னா Flutter repo-ல backend folder separate இருக்கு
+
+🟢 STEP 3: Root Directory set பண்ணு
+    • Project open பண்ணு 
+    • Backend service click பண்ணு 
+    • Go to → Settings 
+👉 இங்க:
+Root Directory = home-remedies-backend
+👉 இது romba important — இல்லனா build fail confirm
+
+🟢 STEP 4: Start Command check
+Same Settings page-ல:
+👉 Add this if not present:
+Start Command = python main.py
+(அல்லது உன் backend file name எதுவோ அதே use பண்ணு)
+
+🟢 STEP 5: PostgreSQL add பண்ணு
+    • Project dashboard போ 
+    • Click → + New 
+    • Select → Database → PostgreSQL 
+👉 இது auto create ஆகும்
+
+🟢 STEP 6: DATABASE_URL connect பண்ணு
+    • Backend service open பண்ணு 
+    • Go to → Variables tab 
+👉 Add:
+Key: DATABASE_URL
+Value: (PostgreSQL → Connect → Copy URL)
+
+🟢 STEP 7: Deploy again
+    • Go to → Deployments tab 
+    • Click → Redeploy 
+👉 இப்போ build success ஆகணும்
+
+🟢 STEP 8: Domain generate பண்ணு
+    • Settings → Networking 
+    • Click → Generate Domain 
+👉 Example:
+https://abc123.up.railway.app
+
+🟢 STEP 9: Flutter app update
+👉 database_service.dart line 58:
+Replace:
+static const String _baseUrl = 'https://your-actual-railway-url.up.railway.app';
+👉 with:
+static const String _baseUrl = 'https://abc123.up.railway.app';
+
+🟢 STEP 10: APK build
+flutter clean
+flutter build apk --release
+
+🟢 STEP 11: Test
+    • APK install பண்ணு 
+    • Login / Register try பண்ணு 
+    • DB-ல data save ஆகும்                                                                                 

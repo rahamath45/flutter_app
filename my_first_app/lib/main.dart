@@ -49,6 +49,9 @@ class HomeRemediesApp extends StatelessWidget {
   }
 }
 
+// ============================================================
+// SPLASH SCREEN — checks auto-login
+// ============================================================
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -80,7 +83,7 @@ class _SplashScreenState extends State<SplashScreen> {
           MaterialPageRoute(builder: (context) => RecordingPage(user: user)),
         );
       } else {
-        _logger.info('No existing user found, showing login page');
+        _logger.info('No active session found, showing login page');
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const LoginPage()),
@@ -126,6 +129,9 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 }
 
+// ============================================================
+// LOGIN PAGE — Contact + Password only
+// ============================================================
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -135,21 +141,10 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final _ageController = TextEditingController();
-  final _locationController = TextEditingController();
   final _contactController = TextEditingController();
   final _passwordController = TextEditingController();
-  String _selectedGender = '';
   bool _obscurePassword = true;
   bool _isLoading = false;
-
-  final List<String> _genders = [
-    'Male',
-    'Female',
-    'Other',
-    'Prefer not to say',
-  ];
 
   Future<void> _login() async {
     _logger.info('Login attempt started');
@@ -160,52 +155,50 @@ class _LoginPageState extends State<LoginPage> {
         final deviceId = await DeviceService.getDeviceId();
         final dbService = await DatabaseService.getInstance();
 
-        final user = User(
-          name: _nameController.text.trim().isEmpty
-              ? null
-              : _nameController.text.trim(),
-          age: int.parse(_ageController.text),
-          gender: _selectedGender,
-          location: _locationController.text.trim(),
-          contact: _contactController.text.trim(),
-          password: _passwordController.text,
-          deviceId: deviceId,
+        final user = await dbService.validateLogin(
+          _contactController.text.trim(),
+          _passwordController.text,
+          deviceId,
         );
 
-        final saved = await dbService.saveUser(user);
-        if (saved) {
-          _logger.info('User saved successfully: ${user.contact}');
-          if (!mounted) return;
+        if (!mounted) return;
+
+        if (user != null) {
+          _logger.info('Login successful for: ${user.contact}');
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (context) => RecordingPage(user: user)),
           );
         } else {
-          _logger.severe('Failed to save user to database');
-          if (!mounted) return;
+          _logger.warning('Login failed: invalid credentials');
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error: Could not save user. Please try again.'),
+            const SnackBar(
+              content: Text('Invalid contact number or password. Please try again.'),
+              backgroundColor: Colors.red,
             ),
           );
         }
       } catch (e) {
         _logger.severe('Login failed: $e');
         if (!mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${e.toString()}')),
+        );
       } finally {
         if (mounted) setState(() => _isLoading = false);
       }
     }
   }
 
+  void _goToRegister() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const RegisterPage()),
+    );
+  }
+
   @override
   void dispose() {
-    _nameController.dispose();
-    _ageController.dispose();
-    _locationController.dispose();
     _contactController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -240,17 +233,283 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Your health, your wisdom',
+                    'Welcome back! Sign in to continue',
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 40),
+
+                  // Contact field
+                  TextFormField(
+                    controller: _contactController,
+                    decoration: InputDecoration(
+                      labelText: 'Contact Number',
+                      prefixIcon: const Icon(Icons.phone_outlined),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      filled: true,
+                    ),
+                    keyboardType: TextInputType.phone,
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Please enter your contact number';
+                      }
+                      if (value.trim().length < 7) {
+                        return 'Please enter a valid contact number';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Password field
+                  TextFormField(
+                    controller: _passwordController,
+                    decoration: InputDecoration(
+                      labelText: 'Password',
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscurePassword
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _obscurePassword = !_obscurePassword;
+                          });
+                        },
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      filled: true,
+                    ),
+                    obscureText: _obscurePassword,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter your password';
+                      }
+                      if (value.length < 4) {
+                        return 'Password must be at least 4 characters';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 32),
+
+                  // Sign In button
+                  FilledButton.icon(
+                    onPressed: _isLoading ? null : _login,
+                    icon: _isLoading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.login),
+                    label: const Text(
+                      'Sign In',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Sign Up link
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        "Don't have an account? ",
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: _goToRegister,
+                        child: Text(
+                          'Sign Up',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context).colorScheme.primary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// REGISTER PAGE — Full user details
+// ============================================================
+class RegisterPage extends StatefulWidget {
+  const RegisterPage({super.key});
+
+  @override
+  State<RegisterPage> createState() => _RegisterPageState();
+}
+
+class _RegisterPageState extends State<RegisterPage> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _ageController = TextEditingController();
+  final _locationController = TextEditingController();
+  final _contactController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+  String _selectedGender = '';
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
+  bool _isLoading = false;
+
+  final List<String> _genders = [
+    'Male',
+    'Female',
+    'Other',
+    'Prefer not to say',
+  ];
+
+  Future<void> _register() async {
+    _logger.info('Registration attempt started');
+    if (_formKey.currentState!.validate()) {
+      setState(() => _isLoading = true);
+
+      try {
+        final deviceId = await DeviceService.getDeviceId();
+        final dbService = await DatabaseService.getInstance();
+
+        final user = User(
+          name: _nameController.text.trim().isEmpty
+              ? null
+              : _nameController.text.trim(),
+          age: int.parse(_ageController.text),
+          gender: _selectedGender,
+          location: _locationController.text.trim(),
+          contact: _contactController.text.trim(),
+          password: _passwordController.text,
+          deviceId: deviceId,
+        );
+
+        final saved = await dbService.saveUser(user);
+        if (saved) {
+          _logger.info('User registered successfully: ${user.contact}');
+          if (!mounted) return;
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Registration successful! You are now logged in.'),
+              backgroundColor: Colors.green,
+            ),
+          );
+
+          // Navigate to the main app page after successful registration
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (context) => RecordingPage(user: user)),
+            (route) => false, // Remove all previous routes
+          );
+        } else {
+          _logger.warning('Registration failed');
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'An account with this contact number already exists. Please login instead.',
+              ),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      } catch (e) {
+        _logger.severe('Registration failed: $e');
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${e.toString()}')),
+        );
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _ageController.dispose();
+    _locationController.dispose();
+    _contactController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Create Account'),
+        centerTitle: true,
+        elevation: 0,
+      ),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Icon(
+                    Icons.person_add_alt_1_rounded,
+                    size: 64,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Sign Up',
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Fill in your details to create an account',
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 32),
+
+                  // Name
                   TextFormField(
                     controller: _nameController,
                     decoration: InputDecoration(
-                      labelText: 'Name (Optional)',
+                      labelText: 'Full Name *',
                       prefixIcon: const Icon(Icons.person_outline),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16),
@@ -258,8 +517,16 @@ class _LoginPageState extends State<LoginPage> {
                       filled: true,
                     ),
                     textCapitalization: TextCapitalization.words,
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Please enter your name';
+                      }
+                      return null;
+                    },
                   ),
                   const SizedBox(height: 16),
+
+                  // Age
                   TextFormField(
                     controller: _ageController,
                     decoration: InputDecoration(
@@ -284,6 +551,8 @@ class _LoginPageState extends State<LoginPage> {
                     },
                   ),
                   const SizedBox(height: 16),
+
+                  // Gender
                   DropdownButtonFormField<String>(
                     decoration: InputDecoration(
                       labelText: 'Gender *',
@@ -312,6 +581,8 @@ class _LoginPageState extends State<LoginPage> {
                     },
                   ),
                   const SizedBox(height: 16),
+
+                  // Location
                   TextFormField(
                     controller: _locationController,
                     decoration: InputDecoration(
@@ -331,10 +602,12 @@ class _LoginPageState extends State<LoginPage> {
                     },
                   ),
                   const SizedBox(height: 16),
+
+                  // Contact
                   TextFormField(
                     controller: _contactController,
                     decoration: InputDecoration(
-                      labelText: 'Contact *',
+                      labelText: 'Contact Number *',
                       prefixIcon: const Icon(Icons.phone_outlined),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16),
@@ -353,6 +626,8 @@ class _LoginPageState extends State<LoginPage> {
                     },
                   ),
                   const SizedBox(height: 16),
+
+                  // Password
                   TextFormField(
                     controller: _passwordController,
                     decoration: InputDecoration(
@@ -386,18 +661,56 @@ class _LoginPageState extends State<LoginPage> {
                       return null;
                     },
                   ),
+                  const SizedBox(height: 16),
+
+                  // Confirm Password
+                  TextFormField(
+                    controller: _confirmPasswordController,
+                    decoration: InputDecoration(
+                      labelText: 'Confirm Password *',
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscureConfirmPassword
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _obscureConfirmPassword = !_obscureConfirmPassword;
+                          });
+                        },
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      filled: true,
+                    ),
+                    obscureText: _obscureConfirmPassword,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please confirm your password';
+                      }
+                      if (value != _passwordController.text) {
+                        return 'Passwords do not match';
+                      }
+                      return null;
+                    },
+                  ),
                   const SizedBox(height: 32),
+
+                  // Register button
                   FilledButton.icon(
-                    onPressed: _isLoading ? null : _login,
+                    onPressed: _isLoading ? null : _register,
                     icon: _isLoading
                         ? const SizedBox(
                             width: 20,
                             height: 20,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Icon(Icons.login),
+                        : const Icon(Icons.app_registration),
                     label: const Text(
-                      'Login / Continue',
+                      'Register',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -410,6 +723,30 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                     ),
                   ),
+                  const SizedBox(height: 20),
+
+                  // Already have an account? Sign In
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Already have an account? ',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => Navigator.pop(context),
+                        child: Text(
+                          'Sign In',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context).colorScheme.primary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -420,6 +757,9 @@ class _LoginPageState extends State<LoginPage> {
   }
 }
 
+// ============================================================
+// RECORDING PAGE — Main app page after login
+// ============================================================
 class RecordingPage extends StatefulWidget {
   final User user;
 
@@ -433,22 +773,24 @@ class _RecordingPageState extends State<RecordingPage> {
   bool _isRecording = false;
   int _recordingSeconds = 0;
 
+  /// Logout: clears device_id (does NOT delete user data), navigates to LoginPage
   Future<void> _logout() async {
     _logger.info('Logout initiated for user: ${widget.user.contact}');
     try {
       final deviceId = await DeviceService.getDeviceId();
       final dbService = await DatabaseService.getInstance();
-      await dbService.deleteUserByDeviceId(deviceId);
-      _logger.info('User deleted successfully');
+      await dbService.logout(deviceId);
+      _logger.info('User logged out successfully (data preserved)');
     } catch (e) {
       _logger.severe('Logout failed: $e');
     }
 
     if (!mounted) return;
 
-    Navigator.pushReplacement(
+    Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (context) => const LoginPage()),
+      (route) => false, // Remove all routes
     );
   }
 

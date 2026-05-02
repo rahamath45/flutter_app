@@ -32,7 +32,7 @@ class User {
       location: json['location'] as String,
       contact: json['contact'] as String,
       password: json['password'] as String,
-      deviceId: json['device_id'] as String,
+      deviceId: json['device_id'] as String? ?? '',
     );
   }
 
@@ -66,8 +66,9 @@ class DatabaseService {
 
   static bool get isInitialized => true; // Always "initialized" with HTTP
 
+  /// Register a new user (saves all details + device_id)
   Future<bool> saveUser(User user) async {
-    _logger.fine('Saving user via API: ${user.contact}');
+    _logger.fine('Registering user via API: ${user.contact}');
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/api/save-user'),
@@ -76,18 +77,39 @@ class DatabaseService {
       );
 
       if (response.statusCode == 200) {
-        _logger.fine('User saved successfully: ${user.deviceId}');
+        _logger.fine('User registered successfully: ${user.deviceId}');
         return true;
+      } else if (response.statusCode == 409) {
+        _logger.warning('User already exists: ${user.contact}');
+        return false;
       } else {
-        _logger.severe('Failed to save user: ${response.body}');
+        _logger.severe('Failed to register user: ${response.body}');
         return false;
       }
     } catch (e, stack) {
-      _logger.severe('Failed to save user: $e', e, stack);
+      _logger.severe('Failed to register user: $e', e, stack);
       return false;
     }
   }
 
+  /// Get the error message from a failed save attempt
+  Future<String?> getSaveErrorMessage(User user) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/api/save-user'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(user.toJson()),
+      );
+
+      if (response.statusCode == 409) {
+        final data = jsonDecode(response.body);
+        return data['message'] as String?;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Get user by device_id (for auto-login check)
   Future<User?> getUserByDeviceId(String deviceId) async {
     _logger.fine('Fetching user by deviceId: $deviceId');
     try {
@@ -109,6 +131,7 @@ class DatabaseService {
     return null;
   }
 
+  /// Delete user by device_id (kept for admin purposes)
   Future<void> deleteUserByDeviceId(String deviceId) async {
     _logger.fine('Deleting user by deviceId: $deviceId');
     try {
@@ -126,6 +149,7 @@ class DatabaseService {
     }
   }
 
+  /// Validate login credentials (contact + password)
   Future<User?> validateLogin(
     String contact,
     String password,
@@ -149,11 +173,36 @@ class DatabaseService {
           _logger.fine('Login validated for: $contact');
           return User.fromJson(data['user']);
         }
+      } else if (response.statusCode == 401) {
+        _logger.warning('Invalid credentials for: $contact');
       }
     } catch (e, stack) {
       _logger.severe('Failed to validate login: $e', e, stack);
     }
     return null;
+  }
+
+  /// Logout: clears device_id without deleting user data
+  Future<bool> logout(String deviceId) async {
+    _logger.fine('Logging out device: $deviceId');
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/api/logout'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'device_id': deviceId}),
+      );
+
+      if (response.statusCode == 200) {
+        _logger.fine('Logged out successfully');
+        return true;
+      } else {
+        _logger.warning('Logout response: ${response.body}');
+        return false;
+      }
+    } catch (e, stack) {
+      _logger.severe('Failed to logout: $e', e, stack);
+      return false;
+    }
   }
 
   void close() {
