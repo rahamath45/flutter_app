@@ -99,27 +99,21 @@ app.post('/api/save-user', async (req, res) => {
   }
 
   try {
-    // Check if contact already exists
-    const existing = await pool.query(
-      'SELECT * FROM users WHERE contact = $1',
-      [contact]
-    );
-
-    if (existing.rows.length > 0) {
-      return res.status(409).json({ 
-        success: false, 
-        message: 'An account with this contact number already exists. Please login instead.' 
-      });
-    }
-
     const result = await pool.query(
       `INSERT INTO users (name, age, gender, location, contact, password, device_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (contact) DO UPDATE SET
+         name = EXCLUDED.name,
+         age = EXCLUDED.age,
+         gender = EXCLUDED.gender,
+         location = EXCLUDED.location,
+         password = EXCLUDED.password,
+         device_id = EXCLUDED.device_id
        RETURNING *`,
       [name || null, age, gender, location, contact, password, device_id]
     );
 
-    console.log(`✅ User registered: ${contact}`);
+    console.log(`✅ User saved: ${contact}, device_id: ${device_id}`);
     res.status(200).json({ success: true, user: result.rows[0] });
   } catch (err) {
     console.error('❌ Save user error:', err.message);
