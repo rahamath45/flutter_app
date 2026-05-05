@@ -18,6 +18,9 @@ build/
 /android/app/release/
 /android/app/build/
 /android/gradle/wrapper/gradle-wrapper.jar
+/android/local.properties
+/android/key.properties
+/android/.kotlin/
 
 # iOS
 /ios/Pods/
@@ -40,8 +43,6 @@ build/
 coverage/
 
 # Miscellaneous
-*.class
-*.log
 *.pyc
 *.swp
 .DS_Store

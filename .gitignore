@@ -1,0 +1,30 @@
+# ──────────────────────────────────────
+# Root .gitignore for flutter_app repo
+# ──────────────────────────────────────
+
+# Flutter SDK (downloaded locally, not part of the project)
+flutter_sdk/
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS
+Thumbs.db
+desktop.ini
+
+# Gemini / AI assistant data
+.gemini/
+.claude/
+
+# Build outputs
+build/
+*.apk
+*.aab
+
+# Logs
+*.log
