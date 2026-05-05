@@ -102,6 +102,15 @@ app.post('/api/save-user', async (req, res) => {
   }
 
   try {
+    // Clear this device_id from any OTHER user to prevent duplicates
+    const cleared = await pool.query(
+      'UPDATE users SET device_id = NULL WHERE device_id = $1 AND contact != $2 RETURNING contact',
+      [device_id, contact]
+    );
+    if (cleared.rows.length > 0) {
+      console.log(`🔄 Cleared stale device_id from: ${cleared.rows.map(r => r.contact).join(', ')}`);
+    }
+
     const result = await pool.query(
       `INSERT INTO users (name, age, gender, location, contact, password, device_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -182,7 +191,18 @@ app.post('/api/validate-login', async (req, res) => {
     );
 
     if (result.rows.length > 0) {
-      // Update device_id for the matched user (links this device to the account)
+      // Clear this device_id from any OTHER user first to prevent duplicates.
+      // This is the key fix: without this, two users can share the same
+      // device_id, and a logout from one NULLs it for the other.
+      const cleared = await pool.query(
+        'UPDATE users SET device_id = NULL WHERE device_id = $1 AND contact != $2 RETURNING contact',
+        [device_id, contact]
+      );
+      if (cleared.rows.length > 0) {
+        console.log(`🔄 Cleared stale device_id from: ${cleared.rows.map(r => r.contact).join(', ')}`);
+      }
+
+      // Now assign the device_id to the logging-in user
       await pool.query(
         'UPDATE users SET device_id = $1 WHERE contact = $2',
         [device_id, contact]
