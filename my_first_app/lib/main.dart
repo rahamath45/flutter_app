@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:logging/logging.dart';
@@ -21,6 +22,10 @@ void main() async {
   _logger.info('Application starting...');
 
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Shabd SDK Platform Channel listeners
+  ShabdService.initialize();
+
   // Pre-initialize the database so writes are ready on first use
   try {
     await DatabaseService.getInstance();
@@ -779,6 +784,7 @@ class _RecordingPageState extends State<RecordingPage> {
   int _recordingSeconds = 0;
   String _transcribedText = '';
   String _partialText = '';
+  Timer? _timer;
   String _statusMessage = 'Initializing...';
 
   @override
@@ -869,24 +875,65 @@ class _RecordingPageState extends State<RecordingPage> {
   }
 
   Future<void> _startRecording() async {
-    // Re-initialize if SDK wasn't ready
-    if (!_isSDKReady) {
-      await _initializeSDK();
-      if (!_isSDKReady) return;
-    }
+    try {
+      // Request mic permission first (required on Android 6+)
+      final hasPermission = await ShabdService.requestMicPermission();
+      _logger.info('Mic permission result: $hasPermission');
 
-    final started = await ShabdService.startListening();
-    if (started && mounted) {
-      setState(() {
-        _isRecording = true;
-        _recordingSeconds = 0;
-        _partialText = '';
-      });
-      _startTimer();
+      if (!hasPermission) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Microphone permission is required. Please allow it.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Re-initialize if SDK wasn't ready
+      if (!_isSDKReady) {
+        _logger.info('SDK not ready, attempting re-initialization...');
+        await _initializeSDK();
+      }
+
+      // Start recording — even if SDK init failed, we start the UI
+      bool sttStarted = false;
+      if (_isSDKReady) {
+        sttStarted = await ShabdService.startListening();
+        _logger.info('STT startListening result: $sttStarted');
+      } else {
+        _logger.warning('SDK not ready, recording without STT');
+      }
+
+      if (mounted) {
+        setState(() {
+          _isRecording = true;
+          _recordingSeconds = 0;
+          _partialText = '';
+          if (!sttStarted) {
+            _statusMessage = 'Recording (STT unavailable)';
+          }
+        });
+        _startTimer();
+      }
+    } catch (e) {
+      _logger.severe('Error starting recording: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
   Future<void> _stopRecording() async {
+    _timer?.cancel();
+    _timer = null;
     await ShabdService.stopListening();
     if (mounted) {
       setState(() {
@@ -901,16 +948,18 @@ class _RecordingPageState extends State<RecordingPage> {
   }
 
   void _startTimer() {
-    Future.doWhile(() async {
-      await Future.delayed(const Duration(seconds: 1));
-      if (!_isRecording || !mounted) return false;
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!_isRecording || !mounted) {
+        timer.cancel();
+        return;
+      }
       setState(() => _recordingSeconds++);
       // Auto-stop at 15 minutes
       if (_recordingSeconds >= 900) {
-        await _stopRecording();
-        return false;
+        _stopRecording();
+        timer.cancel();
       }
-      return true;
     });
   }
 

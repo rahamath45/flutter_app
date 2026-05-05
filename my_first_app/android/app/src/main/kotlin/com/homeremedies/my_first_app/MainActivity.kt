@@ -1,5 +1,7 @@
 package com.homeremedies.my_first_app
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
@@ -8,6 +10,8 @@ import android.os.Looper
 import android.media.AudioTrack
 import android.media.AudioManager
 import android.media.AudioAttributes
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -18,9 +22,11 @@ import org.shabd.edge.interfaces.IMTService
 
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "com.homeremedies/shabd_sdk"
+    private val MIC_PERMISSION_CODE = 200
     private var voiceAI: VoiceAI? = null
     private var methodChannel: MethodChannel? = null
     private val mainHandler = Handler(Looper.getMainLooper())
+    private var pendingPermissionResult: MethodChannel.Result? = null
 
     // Audio recording for STT
     private var audioRecord: AudioRecord? = null
@@ -34,6 +40,22 @@ class MainActivity : FlutterActivity() {
 
         methodChannel?.setMethodCallHandler { call, result ->
             when (call.method) {
+                // ──────────────────────────────────────────────
+                // REQUEST MIC PERMISSION
+                // ──────────────────────────────────────────────
+                "requestMicPermission" -> {
+                    if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+                        == PackageManager.PERMISSION_GRANTED) {
+                        result.success(mapOf("granted" to true))
+                    } else {
+                        pendingPermissionResult = result
+                        ActivityCompat.requestPermissions(
+                            this,
+                            arrayOf(Manifest.permission.RECORD_AUDIO),
+                            MIC_PERMISSION_CODE
+                        )
+                    }
+                }
                 // ──────────────────────────────────────────────
                 // INITIALIZE TTS
                 // ──────────────────────────────────────────────
@@ -302,6 +324,15 @@ class MainActivity : FlutterActivity() {
                 e.printStackTrace()
             }
         }.start()
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == MIC_PERMISSION_CODE) {
+            val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
+            pendingPermissionResult?.success(mapOf("granted" to granted))
+            pendingPermissionResult = null
+        }
     }
 
     override fun onDestroy() {

@@ -41,6 +41,24 @@ class ShabdService {
   }
 
   // ──────────────────────────────────────────────
+  // PERMISSIONS
+  // ──────────────────────────────────────────────
+
+  /// Request microphone permission at runtime (required for Android 6+).
+  /// Returns true if permission is granted.
+  static Future<bool> requestMicPermission() async {
+    try {
+      final result = await _channel.invokeMethod('requestMicPermission');
+      final granted = result['granted'] == true;
+      _logger.info('Mic permission: ${granted ? "granted" : "denied"}');
+      return granted;
+    } on PlatformException catch (e) {
+      _logger.severe('Failed to request mic permission: ${e.message}');
+      return false;
+    }
+  }
+
+  // ──────────────────────────────────────────────
   // TTS (Text-to-Speech) — On Device
   // ──────────────────────────────────────────────
 
