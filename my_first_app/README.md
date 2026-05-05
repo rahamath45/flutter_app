@@ -246,3 +246,21 @@ No Linux desktop or Android used
 
 Perfect! I've fixed the issue. The problem was that your Flutter app on the real Android phone was trying to connect to 'localhost' (the phone's localhost), but PostgreSQL is running on your computer.
 
+
+Component	Status
+SDK .jar in android/app/libs/	✅
+build.gradle.kts — dependency + packaging rules	✅
+AndroidManifest.xml — RECORD_AUDIO permission	✅
+MainActivity.kt — Platform Channel bridge (TTS/STT/MT)	✅
+shabd_service.dart — Flutter wrapper	✅
+main.dart — SDK initialized + RecordingPage uses STT	✅
+API key a32b5865-fe64-4b13-8ee8-9037c5ea07c6 configured	✅
+What the app now does:
+
+When you open the RecordingPage, Shabd STT auto-initializes (Hindi)
+Tap the mic button → starts real-time speech-to-text using Shabd SDK
+Transcribed text appears live in a scrollable text area
+Tap stop → recording stops, final text is preserved
+Auto-stops at 15 minutes
+🗑️ button clears the transcript
+

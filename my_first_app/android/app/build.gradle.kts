@@ -37,6 +37,32 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+
+    // Handle duplicate classes bundled inside the Shabd SDK fat JAR
+    packaging {
+        resources {
+            pickFirsts += listOf(
+                "META-INF/MANIFEST.MF",
+                "META-INF/LICENSE",
+                "META-INF/NOTICE",
+                "META-INF/LICENSE.md",
+                "META-INF/NOTICE.md",
+                "META-INF/versions/**",
+                "META-INF/services/**",
+                "META-INF/maven/**"
+            )
+        }
+    }
+}
+
+configurations.all {
+    // Exclude transitive okio-jvm since the Shabd SDK fat JAR bundles its own copy
+    exclude(group = "com.squareup.okio", module = "okio-jvm")
+    exclude(group = "com.squareup.okio", module = "okio")
+}
+
+dependencies {
+    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar"))))
 }
 
 flutter {

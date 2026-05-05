@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:logging/logging.dart';
 import 'database_service.dart';
 import 'device_service.dart';
+import 'shabd_service.dart';
 
 export 'database_service.dart' show User;
 
@@ -770,12 +771,77 @@ class RecordingPage extends StatefulWidget {
 }
 
 class _RecordingPageState extends State<RecordingPage> {
+  static const String _shabdApiKey = 'a32b5865-fe64-4b13-8ee8-9037c5ea07c6';
+
   bool _isRecording = false;
+  bool _isSDKReady = false;
+  bool _isInitializing = false;
   int _recordingSeconds = 0;
+  String _transcribedText = '';
+  String _partialText = '';
+  String _statusMessage = 'Initializing...';
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeSDK();
+  }
+
+  Future<void> _initializeSDK() async {
+    setState(() => _isInitializing = true);
+
+    // Register STT callbacks
+    ShabdService.onPartialResult = (text) {
+      if (mounted) {
+        setState(() => _partialText = text);
+      }
+    };
+
+    ShabdService.onFinalResult = (text, segmentIndex) {
+      if (mounted) {
+        setState(() {
+          if (text.isNotEmpty) {
+            _transcribedText += '${_transcribedText.isEmpty ? '' : ' '}$text';
+          }
+          _partialText = '';
+        });
+      }
+    };
+
+    ShabdService.onSTTError = (error) {
+      _logger.severe('STT Error: $error');
+    };
+
+    // Initialize STT with Hindi (default)
+    final sttReady = await ShabdService.initializeSTT(
+      licenseKey: _shabdApiKey,
+      language: 'hi',
+    );
+
+    if (mounted) {
+      setState(() {
+        _isSDKReady = sttReady;
+        _isInitializing = false;
+        _statusMessage = sttReady ? 'Ready to record' : 'SDK init failed — tap mic to try again';
+      });
+    }
+
+    if (sttReady) {
+      _logger.info('Shabd STT initialized successfully');
+    } else {
+      _logger.warning('Shabd STT initialization failed');
+    }
+  }
 
   /// Logout: clears device_id (does NOT delete user data), navigates to LoginPage
   Future<void> _logout() async {
     _logger.info('Logout initiated for user: ${widget.user.contact}');
+
+    // Stop recording if active
+    if (_isRecording) {
+      await _stopRecording();
+    }
+
     try {
       final deviceId = await DeviceService.getDeviceId();
       final dbService = await DatabaseService.getInstance();
@@ -794,12 +860,64 @@ class _RecordingPageState extends State<RecordingPage> {
     );
   }
 
-  void _toggleRecording() {
-    setState(() {
-      _isRecording = !_isRecording;
-      if (_isRecording) {
+  Future<void> _toggleRecording() async {
+    if (_isRecording) {
+      await _stopRecording();
+    } else {
+      await _startRecording();
+    }
+  }
+
+  Future<void> _startRecording() async {
+    // Re-initialize if SDK wasn't ready
+    if (!_isSDKReady) {
+      await _initializeSDK();
+      if (!_isSDKReady) return;
+    }
+
+    final started = await ShabdService.startListening();
+    if (started && mounted) {
+      setState(() {
+        _isRecording = true;
         _recordingSeconds = 0;
+        _partialText = '';
+      });
+      _startTimer();
+    }
+  }
+
+  Future<void> _stopRecording() async {
+    await ShabdService.stopListening();
+    if (mounted) {
+      setState(() {
+        _isRecording = false;
+        // Append any remaining partial text
+        if (_partialText.isNotEmpty) {
+          _transcribedText += '${_transcribedText.isEmpty ? '' : ' '}$_partialText';
+          _partialText = '';
+        }
+      });
+    }
+  }
+
+  void _startTimer() {
+    Future.doWhile(() async {
+      await Future.delayed(const Duration(seconds: 1));
+      if (!_isRecording || !mounted) return false;
+      setState(() => _recordingSeconds++);
+      // Auto-stop at 15 minutes
+      if (_recordingSeconds >= 900) {
+        await _stopRecording();
+        return false;
       }
+      return true;
+    });
+  }
+
+  void _clearTranscript() {
+    setState(() {
+      _transcribedText = '';
+      _partialText = '';
     });
   }
 
@@ -811,12 +929,21 @@ class _RecordingPageState extends State<RecordingPage> {
 
   @override
   Widget build(BuildContext context) {
+    final displayText = _transcribedText +
+        (_partialText.isNotEmpty ? '${_transcribedText.isEmpty ? '' : ' '}\u200b$_partialText...' : '');
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Record Remedy'),
         centerTitle: true,
         elevation: 0,
         actions: [
+          if (_transcribedText.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.delete_outline),
+              onPressed: _clearTranscript,
+              tooltip: 'Clear transcript',
+            ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: _logout,
@@ -828,23 +955,67 @@ class _RecordingPageState extends State<RecordingPage> {
         padding: const EdgeInsets.all(24),
         child: Column(
           children: [
-            const Spacer(),
             Text(
               'Namaste! I am gathering home remedies for everyday health issues. Your help would mean a lot. Just tap the mic and record the remedies you know (up to 15 minutes at once).',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                 fontWeight: FontWeight.w500,
                 height: 1.5,
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
             Text(
               'Welcome${widget.user.name != null ? ', ${widget.user.name}' : ''}',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 color: Theme.of(context).colorScheme.primary,
               ),
             ),
-            const Spacer(),
+            const SizedBox(height: 24),
+
+            // Transcribed text area
+            Expanded(
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: _isRecording
+                        ? Theme.of(context).colorScheme.primary.withAlpha(128)
+                        : Theme.of(context).colorScheme.outline.withAlpha(51),
+                    width: _isRecording ? 2 : 1,
+                  ),
+                ),
+                child: displayText.isEmpty
+                    ? Center(
+                        child: Text(
+                          _isInitializing
+                              ? 'Initializing speech engine...'
+                              : _isRecording
+                                  ? 'Listening... speak now'
+                                  : 'Tap the mic button to start recording.\nYour speech will appear here.',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant.withAlpha(153),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      )
+                    : SingleChildScrollView(
+                        reverse: true,
+                        child: Text(
+                          displayText,
+                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            height: 1.6,
+                          ),
+                        ),
+                      ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Recording timer
             if (_isRecording) ...[
               Text(
                 _formatDuration(_recordingSeconds),
@@ -853,7 +1024,7 @@ class _RecordingPageState extends State<RecordingPage> {
                   color: Theme.of(context).colorScheme.primary,
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 4),
               Text(
                 'Recording...',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -861,60 +1032,77 @@ class _RecordingPageState extends State<RecordingPage> {
                 ),
               ),
             ],
-            const SizedBox(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Spacer(),
-                GestureDetector(
-                  onTap: _toggleRecording,
-                  child: Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      color: _isRecording
+            if (!_isRecording && !_isInitializing)
+              Text(
+                _statusMessage,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            const SizedBox(height: 16),
+
+            // Mic button
+            GestureDetector(
+              onTap: _isInitializing ? null : _toggleRecording,
+              child: Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: _isInitializing
+                      ? Theme.of(context).colorScheme.surfaceContainerHighest
+                      : _isRecording
                           ? Theme.of(context).colorScheme.error
                           : Theme.of(context).colorScheme.primary,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color:
-                              (_isRecording
-                                      ? Theme.of(context).colorScheme.error
-                                      : Theme.of(context).colorScheme.primary)
-                                  .withAlpha(77),
-                          blurRadius: 16,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Icon(
-                      _isRecording ? Icons.stop : Icons.mic,
-                      color: Colors.white,
-                      size: 40,
-                    ),
-                  ),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    if (!_isInitializing)
+                      BoxShadow(
+                        color: (_isRecording
+                                ? Theme.of(context).colorScheme.error
+                                : Theme.of(context).colorScheme.primary)
+                            .withAlpha(77),
+                        blurRadius: 16,
+                        offset: const Offset(0, 4),
+                      ),
+                  ],
                 ),
-                const Spacer(),
-              ],
+                child: _isInitializing
+                    ? const Center(
+                        child: SizedBox(
+                          width: 30,
+                          height: 30,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 3,
+                            color: Colors.white,
+                          ),
+                        ),
+                      )
+                    : Icon(
+                        _isRecording ? Icons.stop : Icons.mic,
+                        color: Colors.white,
+                        size: 40,
+                      ),
+              ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             Text(
-              _isRecording ? 'Tap to stop' : 'Tap to record',
+              _isInitializing
+                  ? 'Setting up...'
+                  : _isRecording
+                      ? 'Tap to stop'
+                      : 'Tap to record',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
             Text(
               'Max: 15 minutes',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(
-                  context,
-                ).colorScheme.onSurfaceVariant.withAlpha(153),
+                color: Theme.of(context).colorScheme.onSurfaceVariant.withAlpha(153),
               ),
             ),
-            const Spacer(),
+            const SizedBox(height: 16),
           ],
         ),
       ),
