@@ -818,24 +818,31 @@ class _RecordingPageState extends State<RecordingPage> {
       _logger.severe('STT Error: $error');
     };
 
-    // Initialize STT with Hindi (default)
-    final sttReady = await ShabdService.initializeSTT(
-      licenseKey: _shabdApiKey,
-      language: 'hi',
-    );
+    // Initialize STT with Hindi — use API key as license key
+    try {
+      final sttReady = await ShabdService.initializeSTT(
+        licenseKey: _shabdApiKey,
+        language: 'hi',
+      );
 
-    if (mounted) {
-      setState(() {
-        _isSDKReady = sttReady;
-        _isInitializing = false;
-        _statusMessage = sttReady ? 'Ready to record' : 'SDK init failed — tap mic to try again';
-      });
-    }
+      if (mounted) {
+        setState(() {
+          _isSDKReady = sttReady;
+          _isInitializing = false;
+          _statusMessage = sttReady ? 'Ready to record' : 'Ready (STT unavailable)';
+        });
+      }
 
-    if (sttReady) {
-      _logger.info('Shabd STT initialized successfully');
-    } else {
-      _logger.warning('Shabd STT initialization failed');
+      _logger.info('Shabd STT initialized: $sttReady');
+    } catch (e) {
+      _logger.severe('SDK initialization error: $e');
+      if (mounted) {
+        setState(() {
+          _isSDKReady = false;
+          _isInitializing = false;
+          _statusMessage = 'Ready (STT unavailable)';
+        });
+      }
     }
   }
 
