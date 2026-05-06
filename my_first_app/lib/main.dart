@@ -86,7 +86,7 @@ class _SplashScreenState extends State<SplashScreen> {
         _logger.info('Auto-login success for user: ${user.name}');
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => RecordingPage(user: user)),
+          MaterialPageRoute(builder: (context) => LanguageSelectionPage(user: user)),
         );
       } else {
         _logger.info('No active session found, showing login page');
@@ -173,7 +173,7 @@ class _LoginPageState extends State<LoginPage> {
           _logger.info('Login successful for: ${user.contact}');
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (context) => RecordingPage(user: user)),
+            MaterialPageRoute(builder: (context) => LanguageSelectionPage(user: user)),
           );
         } else {
           _logger.warning('Login failed: invalid credentials');
@@ -431,7 +431,7 @@ class _RegisterPageState extends State<RegisterPage> {
           // Navigate to the main app page after successful registration
           Navigator.pushAndRemoveUntil(
             context,
-            MaterialPageRoute(builder: (context) => RecordingPage(user: user)),
+            MaterialPageRoute(builder: (context) => LanguageSelectionPage(user: user)),
             (route) => false, // Remove all previous routes
           );
         } else {
@@ -764,12 +764,112 @@ class _RegisterPageState extends State<RegisterPage> {
 }
 
 // ============================================================
+// LANGUAGE SELECTION PAGE
+// ============================================================
+class LanguageSelectionPage extends StatelessWidget {
+  final User user;
+
+  const LanguageSelectionPage({super.key, required this.user});
+
+  void _selectLanguage(BuildContext context, String languageCode) {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => RecordingPage(user: user, language: languageCode),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Select Language'),
+        centerTitle: true,
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Choose your preferred language for recording:',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 48),
+              _buildLanguageCard(
+                context,
+                'தமிழ்',
+                'Tamil',
+                'ta',
+              ),
+              const SizedBox(height: 16),
+              _buildLanguageCard(
+                context,
+                'हिन्दी',
+                'Hindi',
+                'hi',
+              ),
+              const SizedBox(height: 16),
+              _buildLanguageCard(
+                context,
+                'English',
+                'English',
+                'en',
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLanguageCard(
+      BuildContext context, String nativeName, String englishName, String code) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: InkWell(
+        onTap: () => _selectLanguage(context, code),
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 24.0, horizontal: 16.0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                nativeName,
+                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              ),
+              Text(
+                englishName,
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================
 // RECORDING PAGE — Main app page after login
 // ============================================================
 class RecordingPage extends StatefulWidget {
   final User user;
+  final String language;
 
-  const RecordingPage({super.key, required this.user});
+  const RecordingPage({super.key, required this.user, required this.language});
 
   @override
   State<RecordingPage> createState() => _RecordingPageState();
@@ -818,11 +918,11 @@ class _RecordingPageState extends State<RecordingPage> {
       _logger.severe('STT Error: $error');
     };
 
-    // Initialize STT with English — use API key as license key
+    // Initialize STT with selected language — use API key as license key
     try {
       final sttReady = await ShabdService.initializeSTT(
         licenseKey: _shabdApiKey,
-        language: 'en',
+        language: widget.language,
       );
 
       if (mounted) {
@@ -983,6 +1083,18 @@ class _RecordingPageState extends State<RecordingPage> {
     return '${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
   }
 
+  String _getIntroText() {
+    switch (widget.language) {
+      case 'ta':
+        return 'வணக்கம்! நான் அன்றாட உடல்நல பிரச்சினைகளுக்கான வீட்டு வைத்தியங்களை சேகரிக்கிறேன். உங்கள் உதவி மிகவும் முக்கியம். மைக்கைத் தட்டி, நீங்கள் அறிந்த வீட்டு வைத்தியங்களை பதிவு செய்யுங்கள் (ஒரு முறையில் 15 நிமிடங்கள் வரை).';
+      case 'hi':
+        return 'नमस्ते! मैं रोज़मर्रा की स्वास्थ्य समस्याओं के लिए घरेलू नुस्खे एकत्र कर रहा हूँ। आपकी मदद बहुत मायने रखती है। बस माइक पर टैप करें और जो भी नुस्खे आपको पता हों उन्हें रिकॉर्ड करें (एक बार में 15 मिनट तक)।';
+      case 'en':
+      default:
+        return 'Namaste! I am gathering home remedies for everyday health issues. Your help would mean a lot. Just tap the mic and record the remedies you know (up to 15 minutes at once).';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final displayText = _transcribedText +
@@ -1012,7 +1124,7 @@ class _RecordingPageState extends State<RecordingPage> {
         child: Column(
           children: [
             Text(
-              'Namaste! I am gathering home remedies for everyday health issues. Your help would mean a lot. Just tap the mic and record the remedies you know (up to 15 minutes at once).',
+              _getIntroText(),
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                 fontWeight: FontWeight.w500,
                 height: 1.5,
