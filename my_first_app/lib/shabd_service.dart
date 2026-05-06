@@ -116,7 +116,7 @@ class ShabdService {
   /// [sampleRate] — Audio sample rate (default: 16000).
   static Future<bool> initializeSTT({
     required String licenseKey,
-    String language = 'hi',
+    String language = 'en',
     int sampleRate = 16000,
   }) async {
     try {

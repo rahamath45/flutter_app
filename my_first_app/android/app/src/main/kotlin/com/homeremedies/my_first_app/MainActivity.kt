@@ -84,7 +84,7 @@ class MainActivity : FlutterActivity() {
                 "initializeSTT" -> {
                     try {
                         val licenseKey = call.argument<String>("licenseKey") ?: ""
-                        val language = call.argument<String>("language") ?: "hi"
+                        val language = call.argument<String>("language") ?: "en"
                         val sampleRate = call.argument<Int>("sampleRate") ?: 16000
 
                         val basePath = context.filesDir.absolutePath
@@ -94,8 +94,8 @@ class MainActivity : FlutterActivity() {
                         voiceAI?.initializeSTT(basePath, licenseKey, language, sampleRate)
 
                         result.success(mapOf("success" to true, "message" to "STT initialized"))
-                    } catch (e: Exception) {
-                        result.error("STT_INIT_ERROR", e.message, null)
+                    } catch (e: Throwable) {
+                        result.error("STT_INIT_ERROR", "STT init failed: ${e.javaClass.simpleName}: ${e.message}", e.stackTraceToString())
                     }
                 }
 

@@ -818,11 +818,11 @@ class _RecordingPageState extends State<RecordingPage> {
       _logger.severe('STT Error: $error');
     };
 
-    // Initialize STT with Hindi — use API key as license key
+    // Initialize STT with English — use API key as license key
     try {
       final sttReady = await ShabdService.initializeSTT(
         licenseKey: _shabdApiKey,
-        language: 'hi',
+        language: 'en',
       );
 
       if (mounted) {
@@ -840,7 +840,7 @@ class _RecordingPageState extends State<RecordingPage> {
         setState(() {
           _isSDKReady = false;
           _isInitializing = false;
-          _statusMessage = 'Ready (STT unavailable)';
+          _statusMessage = 'SDK error: $e';
         });
       }
     }
